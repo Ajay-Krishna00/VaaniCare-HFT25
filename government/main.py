@@ -1,9 +1,15 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from government import duckduckgo_scheme_search
+import whisper
+import os
+import tempfile
 
 app = FastAPI(title="Government Scheme Finder API")
+
+# Load Whisper model (base is good for multilingual speed)
+model = whisper.load_model("base")
 
 # Allow React frontend
 app.add_middleware(
@@ -15,7 +21,7 @@ app.add_middleware(
 )
 
 class UserProfile(BaseModel):
-    age: int
+    age: str
     gender: str
     state: str
     income_bracket: str
@@ -32,3 +38,19 @@ def find_schemes(user: UserProfile):
         "schemes": schemes,
         "disclaimer": "Final eligibility is determined by the concerned government department."
     }
+
+@app.post("/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    # Save uploaded file to temp
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        # Transcribe using Whisper
+        result = model.transcribe(tmp_path)
+        return {"text": result["text"]}
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
