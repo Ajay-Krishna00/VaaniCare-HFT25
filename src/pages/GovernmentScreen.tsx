@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/contexts/TranslationContext';
-import { useWhisperRecognition } from '@/hooks/useWhisperRecognition';
+import { useVoiceRecognition } from '@/hooks/useVoiceRecognition';
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
 import {
   Send,
@@ -76,9 +76,22 @@ export function GovernmentScreen({ onBack }: GovernmentScreenProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const { isListening, startListening, stopListening } = useWhisperRecognition({
-    onResult: (text) => {
-      handleMessageSubmit(text);
+  const { isListening, startListening, stopListening } = useVoiceRecognition({
+    language: currentLanguage,
+    onResult: (text, isFinal) => {
+      if (isFinal) {
+        // Stop current recognition so we can restart cleanly after speaking
+        stopListening();
+        handleMessageSubmit(text);
+      }
+    },
+    onError: () => {
+      // Restart listening on error if we're still in Q&A flow
+      setTimeout(() => {
+        if (shouldListenAfterSpeakRef.current && currentQuestionIndex < QUESTIONS.length) {
+          startListening();
+        }
+      }, 1000);
     }
   });
 
@@ -86,7 +99,7 @@ export function GovernmentScreen({ onBack }: GovernmentScreenProps) {
     language: currentLanguage,
     rate: 0.9,
     onEnd: () => {
-      if (shouldListenAfterSpeakRef.current && currentQuestionIndex < QUESTIONS.length) {
+      if (shouldListenAfterSpeakRef.current) {
         setTimeout(() => startListening(), 500);
       }
     }
@@ -108,6 +121,7 @@ export function GovernmentScreen({ onBack }: GovernmentScreenProps) {
     // Add a slight delay before the assistant speaks to make it more natural
     setTimeout(() => {
       if (index < QUESTIONS.length) {
+        shouldListenAfterSpeakRef.current = true; // Enable auto-listen for this question
         const question = QUESTIONS[index];
         const text = currentLanguage === 'ml' ? question.ml : question.en;
         addMessage('assistant', text);
@@ -116,6 +130,7 @@ export function GovernmentScreen({ onBack }: GovernmentScreenProps) {
         setIsProcessing(false);
       } else {
         // All questions answered, fetch schemes
+        shouldListenAfterSpeakRef.current = false; // Disable auto-listen when done with questions
         performFindSchemes(currentData || userData);
       }
     }, 1500);
@@ -165,7 +180,20 @@ export function GovernmentScreen({ onBack }: GovernmentScreenProps) {
         : `Found ${result.count} schemes for you.`;
 
       addMessage('assistant', successMsg, 'schemes', result);
-      speak(successMsg);
+      // Speak the summary plus top scheme names (up to 3) for accessibility
+      const topSchemes = (result.schemes || []).slice(0, 3);
+      const schemeNames = topSchemes
+        .map((s, idx) => {
+          const title = s.title || '';
+          return `${idx + 1}. ${title}`;
+        })
+        .join('. ');
+
+      const spoken = currentLanguage === 'ml'
+        ? `${result.count} പദ്ധതികൾ കണ്ടെത്തി. മുൻനിര പദ്ധതികൾ: ${schemeNames}`
+        : `${result.count} schemes found. Top options: ${schemeNames}`;
+
+      speak(schemeNames ? spoken : successMsg);
     } catch (error) {
       console.error('Error finding schemes:', error);
       const errorMsg = currentLanguage === 'ml'

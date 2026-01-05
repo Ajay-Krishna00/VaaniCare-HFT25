@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from government import duckduckgo_scheme_search, duckduckgo_legal_search
 from dotenv import load_dotenv
-import whisper
 import httpx
 import os
 import tempfile
@@ -17,8 +16,6 @@ app = FastAPI(title="Government Scheme & Legal AI API")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("VITE_GROQ_API_KEY", "")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# Load Whisper model (base is good for multilingual speed)
-model = whisper.load_model("base")
 
 # Allow React frontend
 app.add_middleware(
@@ -111,15 +108,4 @@ async def get_legal_advice(query: AdviceQuery):
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
     # Save uploaded file to temp
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
-
-    try:
-        # Transcribe using Whisper
-        result = model.transcribe(tmp_path)
-        return {"text": result["text"]}
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    pass
