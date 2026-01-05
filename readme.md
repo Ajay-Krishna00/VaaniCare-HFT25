@@ -307,8 +307,4 @@ Built with ❤️ for accessibility and healthcare innovation
 
 **Ready to revolutionize healthcare access?**
 
-👉 [Get Started in 5 Minutes](QUICKSTART.md)  
-👉 [Read Full Documentation](INDEX.md)  
-👉 [Explore the Code](#)  
-
 ⭐ If you find this useful, please star the repository!
